@@ -1,7 +1,7 @@
 //! Calculate the values of a window function.
 //!
 //! `left_bound`, `right_bound` and `n` in samples.
-//! 
+//!
 //! `n` is sample position within the window,
 //! values outside the window are to be zero,
 //! `left_bound` is inclusive, `right_bound` not.
@@ -47,24 +47,6 @@ pub fn hamming(left_bound: usize, right_bound: usize, n: usize) -> f64 {
         return 0.0;
     } else {
         return 0.53836 + 0.46164 * ( (2.0 * f64::consts::PI * n as f64) / ((width - 1) as f64)).cos();
-    }
-}
-
-/// Quarter-taper window
-///
-/// `left_bound`, `right_bound` and `n` in samples
-///
-/// don't use this.
-pub fn quarter_taper(left_bound: usize, right_bound: usize, n: usize) -> f64 {
-    let width = right_bound - left_bound;
-    if (n < left_bound) || (n >= right_bound) {
-        return 0.0;
-    } else if n < width / 4 {
-        return 4.0 * n as f64 / width as f64;
-    } else if n > (3 * width / 4){
-        return 1.0 - (4.0 * (n - ((3 * width) / 4)) as f64 / width as f64);
-    } else {
-        return 1.0;
     }
 }
 
