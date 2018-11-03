@@ -9,7 +9,6 @@
 pub mod window;
 use std::f64;
 
-
 /// Directly calculates the CQT for a single frequency bin, from some samples.
 ///
 /// Currently, samples at the centre of data.
@@ -22,7 +21,7 @@ use std::f64;
 /// * `resolution`: bins per octave (e.g. 12)
 /// * `data`: handle to array of samples
 /// * `window_fn`: a windowing function matching `fn_name(left_bound: usize, right_bound: usize, n: usize) -> f64`
-pub fn naive_cqt<W>(root_freq: f64, bin: u8, rate: f64, resolution: u8, data: &[i16], window_fn: W) -> u16
+pub fn naive_cqt<W>(root_freq: f64, bin: u8, rate: f64, resolution: u8, data: &[i16], window_fn: &W) -> u16
     where W: Fn(usize, usize, usize) -> f64{
     // first we need to calculate the centre frequency for bin `k`
 
@@ -69,14 +68,15 @@ pub fn naive_cqt<W>(root_freq: f64, bin: u8, rate: f64, resolution: u8, data: &[
 ///
 /// `root_freq * (2.0 ^ (bin / 12.0))` if 12/octave
 pub fn calc_f_k(root_freq: f64, bin: u8, resolution: u8) -> f64 {
-    return root_freq * (2.0_f64).powf(((bin as f64) - 1.0) / (resolution as f64));
+    // Schoerkhuber and Klapuri have a 1-indexed `bin` here. We should not.
+    return root_freq * 2.0_f64.powf( bin as f64 / resolution as f64 );
 }
 
 /// Width (N) of the *kth* bin in Hz.
 ///
-/// `(sample rate / ((2 ^ (1 / resolution)) - 1)) / f_k`
+/// `(sample rate / ()((2 ^ (1 / resolution)) - 1)) * f_k)`
 pub fn calc_N_k(rate: f64, resolution: u8, f_k: f64) -> f64 {
-    return (rate / ((2.0_f64).powf(1.0 / resolution as f64) - 1.0)) / f_k;
+    return rate / ((2.0_f64.powf(1.0 / resolution as f64) - 1.0) * f_k);
 }
 
 /// Calculate the complex and real (respectively) values of the exponent in the atom function.
@@ -87,6 +87,27 @@ pub fn calc_N_k(rate: f64, resolution: u8, f_k: f64) -> f64 {
 /// We can
 pub fn exp_complex(j: i16, f_k: f64, rate: f64) -> (f64, f64) {
     return (-2.0 * (f64::consts::PI) * (j as f64) * f_k / rate).sin_cos();
+}
+
+/// Calculate the CQT over some number of octaves.
+///
+/// Generally the same parameters as `naive_cqt`, except now we want the number of `octaves`,
+/// rather than which `bin` within an octave.
+///
+/// Loops over `naive_cqt` so you don't have to.
+
+pub fn naive_cqt_octaves<W>(root_freq: f64, octaves: u8, rate: f64, resolution: u8, data: &[i16], window_fn: &W) -> Vec<u16>
+    where W: Fn(usize, usize, usize) -> f64{
+
+    // We can't just return an u16 any more.
+    // Instead, return a Vec of them.
+    let mut output: Vec<u16> = Vec::with_capacity((resolution * octaves) as usize);
+
+    for i in 0..(resolution * octaves){
+        output.push(naive_cqt(root_freq, i as u8, rate, resolution, data, window_fn));
+    }
+
+    return output;
 }
 
 /* *** Tests! *** */
@@ -104,11 +125,11 @@ mod tests {
         let rate: f64 = 44100.0;
         let resolution: u8 = 12;
 
-        // 440 * 2 ^ ((0 - 1)/12) = 415.3046975799451
+        // 440 * 2 ^ (2/12) = 493.88330125612
 
-        let f_k: f64 = calc_f_k(root_freq, bin, resolution);
+        let f_k: f64 = calc_f_k(root_freq, 2, resolution);
 
-        assert_eq!(415.0, f_k.round());
+        assert_eq!(494.0, f_k.round());
 
         // Width of bin `k` in Hz
         // precalc'd the 2^(1/12) - 1 = 0.05946309436
@@ -188,8 +209,11 @@ mod tests {
 
         println!("analysis root_freq: {}; rate: {}; resolution: {}", root_freq, rate, resolution);
         println!("f_k\tc");
+
+        let vals = naive_cqt_octaves(root_freq, 4, rate, resolution, &circular_buffer, &window::rect);
+
         for i in 0..48 {
-            let c = naive_cqt(root_freq, i as u8, rate, resolution, &circular_buffer, window::rect);
+            let c = vals[i];
             println!(
                 "{}\t{}",
                 calc_f_k(root_freq, i as u8, resolution).round(),
