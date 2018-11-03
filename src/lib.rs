@@ -21,7 +21,9 @@ use std::f64;
 /// * `rate`: sampling frequency (e.g. 44100hz)
 /// * `resolution`: bins per octave (e.g. 12)
 /// * `data`: handle to array of samples
-pub fn naive_cqt(root_freq: f64, bin: u8, rate: f64, resolution: u8, data: &[i16]) -> u16 {
+/// * `window_fn`: a windowing function matching `fn_name(left_bound: usize, right_bound: usize, n: usize) -> f64`
+pub fn naive_cqt<W>(root_freq: f64, bin: u8, rate: f64, resolution: u8, data: &[i16], window_fn: W) -> u16
+    where W: Fn(usize, usize, usize) -> f64{
     // first we need to calculate the centre frequency for bin `k`
 
     let f_k: f64 = calc_f_k(root_freq, bin, resolution);
@@ -49,7 +51,7 @@ pub fn naive_cqt(root_freq: f64, bin: u8, rate: f64, resolution: u8, data: &[i16
 
     for j in left_bound..right_bound {
         let real_common =
-            (data[j] as f64) * N_k.recip() * window::rect(left_bound, right_bound, j);
+            (data[j] as f64) * N_k.recip() * window_fn(left_bound, right_bound, j);
         let complex_common = exp_complex(
             (j as i16 + (N_k.floor() as i16) / 2) - (data.len() / 2) as i16,
             f_k,
@@ -187,7 +189,7 @@ mod tests {
         println!("analysis root_freq: {}; rate: {}; resolution: {}", root_freq, rate, resolution);
         println!("f_k\tc");
         for i in 0..48 {
-            let c = naive_cqt(root_freq, i as u8, rate, resolution, &circular_buffer);
+            let c = naive_cqt(root_freq, i as u8, rate, resolution, &circular_buffer, window::rect);
             println!(
                 "{}\t{}",
                 calc_f_k(root_freq, i as u8, resolution).round(),
